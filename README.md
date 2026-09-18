@@ -87,7 +87,11 @@ ceiling of the source file — the master is 2508px wide and that slot wants
   uploads keep their full width
 - Raises the srcset ceiling from 1600px to 4096px
 - Marks the hero `fetchpriority="high"` / `loading="eager"` so it paints sooner
-- Collapses the duplicated `fetchpriority` attribute your theme emits
+- Collapses the duplicated `fetchpriority` attribute the theme emits — best
+  effort only. On the live site a later optimisation layer re-serialises the
+  `<img>` tag and puts a duplicate back. Purely cosmetic: browsers honour the
+  first occurrence, and `src`, `srcset` and `sizes` all remain single and
+  correct. No action needed.
 - Purges LiteSpeed Cache on activation
 
 It only ever touches this one artwork, and it is idempotent — running twice
