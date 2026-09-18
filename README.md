@@ -1,135 +1,152 @@
 # Rhino Credit Pros — homepage artwork clarity fix
 
-## What is actually happening
+## Install (one step)
+
+**Plugins → Add New → Upload Plugin → choose `rhino-image-clarity.zip` → Install
+→ Activate.** Then hard-refresh the homepage (Ctrl+F5 / Cmd+Shift+R).
+
+That's it. Nothing to re-upload to the Media Library, nothing to change in the
+block editor. The optimised artwork ships **inside** the plugin, and the plugin
+swaps it in when the page renders. Deactivating it puts everything back exactly
+as it was.
+
+The zip is 3.7 MB. Your server accepts it — the 9.5 MB PNG already in your Media
+Library proves the upload limit is well above that.
+
+---
+
+## What was actually wrong
 
 Your master file is **2508 × 5646 px** and is genuinely sharp. Nothing on the
-server has re-compressed it. The blur is caused entirely by **the browser being
-handed a small file and then stretching it**. Three separate things stack up:
+server re-compressed it — the PNGs come back as untouched `image/png`, so
+**the CDN and caching are not the cause**. The blur is entirely the browser
+being handed a small file and then stretching it. Three things stack up:
 
-**1. WordPress shrank the upload — because the image is tall, not because it's big.**
-WordPress caps the *longest side* of any upload at 2560px and then serves that
-`-scaled` copy in place of the original. Your artwork's longest side is its
-**height** (5646px), so the cap was applied vertically and dragged the **width**
-down with it:
-
-```
-uploaded   2508 × 5646     <- your master, still on the server
--scaled    1137 × 2560     <- what WordPress actually serves as "Full Size"
-```
-
-So even choosing "Full Size" in the editor only gets you 1137px of width.
-
-**2. The block was inserted at the "Large" size — 455px wide.**
+**1. The block was inserted at the "Large" size — 455px wide.**
 
 ```html
 src="...-455x1024.png"  width="455" height="1024"
 ```
 
-**3. The `sizes` attribute tells the browser the slot is 455px wide — it isn't.**
+**2. The `sizes` attribute tells the browser the slot is 455px wide. It isn't.**
 
 ```html
 sizes="(max-width: 455px) 100vw, 455px"
 ```
 
-The figure is `alignfull`, so it spans the **whole viewport**. Measured in a real
-browser on a 1440px window, the image renders at **1440 px wide from a 455 px
-file — a 3.16× upscale**. On a retina laptop the browser picks the 910w file and
-paints it across 2880 device px — the same 3.16× upscale. That is the softness
-you are seeing.
+The figure is `alignfull`, so it spans the **whole viewport**. Measured in
+Chrome on a 1440px window, the image renders at **1440 px wide from a 455 px
+file — a 3.16× upscale**. On a retina screen the browser picks the 910w file and
+paints it across 2880 device px — the same 3.16×. That is the softness.
 
-Verified in Chrome against the live site:
+**3. WordPress shrank the upload — because the image is tall, not because it's big.**
+
+WordPress caps the *longest side* of any upload at 2560px and serves that
+`-scaled` copy in place of the original. Your artwork's longest side is its
+**height** (5646px), so the cap applied vertically and dragged the **width**
+down with it:
+
+```
+uploaded   2508 × 5646     <- your master, still on the server
+-scaled    1137 × 2560     <- what WordPress serves as "Full Size"
+```
+
+So even choosing "Full Size" in the editor only gets you 1137px of width. This
+one cannot be fixed from the editor at all.
+
+### Measured on the live site
 
 | Viewport | File downloaded | Painted at | Result |
 |---|---|---|---|
-| 1440px @1x | 455w | 1440 px | 3.16× upscale |
-| 1440px @2x | 910w | 2880 device px | 3.16× upscale |
+| 1440px @1x | 455w | 1440 px | **3.16× upscale** |
+| 1440px @2x | 910w | 2880 device px | **3.16× upscale** |
 | 390px @2x | 910w | 780 device px | fine |
 
-Note the CDN/cache is **not** the culprit — the PNGs come back as `image/png`,
-uncompressed and untouched.
+### Measured with the plugin active
 
-## The fix
-
-### Step 1 — upload the new file
-
-Use `rhino-home-2508w.webp` (1.3 MB). It is the full 2508px master, WebP
-quality 88. I measured the text areas against the original at **39.7 dB PSNR** —
-visually identical, but 9.4 MB → 1.3 MB.
-
-`rhino-home-2508w.png` is included as a fallback if you'd rather stay on PNG,
-but it is 9.1 MB and there is no visible benefit.
-
-Delete the old attachment from the Media Library first, so WordPress doesn't
-keep serving the old `-455x1024` copy from its sizes table.
-
-### Step 2 — install the plugin
-
-Upload `rhino-image-clarity.php` via **Plugins → Add New → Upload Plugin**
-(zip it first), or drop it straight into `wp-content/mu-plugins/` where it
-activates by itself. It does three things:
-
-- turns off the 2560px cap, so tall uploads keep their full width
-- rewrites `sizes` to `100vw` on any `alignfull` image block
-- raises the srcset ceiling to 4096px
-
-### Step 3 — re-insert the image
-
-In the block editor select the image, and in the right-hand panel set
-**Image size → Full Size**. Save, then purge your cache.
-
-### Verified result
-
-With the fix in place, tested in Chrome:
-
-| Viewport | File downloaded | Painted at | Result |
+| Viewport | File served | Painted at | Scale |
 |---|---|---|---|
-| 1440px @1x | 1536w | 1440 px | slight downscale — sharp |
-| 1440px @2x | 2508w | 2880 device px | 1.15× — sharp |
-| 390px @2x | 1024w | 780 device px | downscale — sharp |
+| 1440px @1x | 1536w | 1440 device px | 0.94× — sharp |
+| 1440px @2x | 2508w | 2880 device px | 1.15× |
+| 1280px @2x | 2508w | 2560 device px | 1.02× — sharp |
+| 768px @2x | 1536w | 1536 device px | 1.00× — sharp |
+| 390px @3x | 1536w | 1170 device px | 0.76× — sharp |
+
+Every case is now at or below 1:1 except retina desktop at 1.15×, which is the
+ceiling of the source file — the master is 2508px wide and that slot wants
+2880px. 1.15× is invisible; 3.16× is what you were looking at.
+
+---
+
+## What the plugin does
+
+- Swaps the homepage artwork for the bundled **2508px WebP** master and gives it
+  a correct four-step `srcset`
+- Sets `sizes="100vw"` so the browser stops picking a file sized for a 455px slot
+- Lifts the 2560px upload cap (`big_image_size_threshold`) so future tall
+  uploads keep their full width
+- Raises the srcset ceiling from 1600px to 4096px
+- Marks the hero `fetchpriority="high"` / `loading="eager"` so it paints sooner
+- Collapses the duplicated `fetchpriority` attribute your theme emits
+- Purges LiteSpeed Cache on activation
+
+It only ever touches this one artwork, and it is idempotent — running twice
+changes nothing.
+
+### Assets
+
+`rhino-home-2508w.webp` is the full master at WebP quality 88. I measured the
+text areas against the original at **39.7 dB PSNR** — identical to the eye, at
+**1.3 MB instead of 9.4 MB**. The 2048/1536/1024 steps are there so phones and
+tablets don't download more than they need.
+
+---
 
 ## Repeating this on future uploads
 
-1. Export at **2× the widest the image will ever be displayed**. Full-width
-   artwork on a desktop layout means **2400–2560px wide**. More than that is
-   wasted bandwidth.
-2. If the image is **taller than 2560px**, you need the plugin installed or
+1. Export at **2× the widest the image will ever display**. Full-width artwork
+   on a desktop layout means **2400–2560px wide**. More is wasted bandwidth.
+2. If the image is **taller than 2560px**, you need this plugin active or
    WordPress will shrink its width. This is the trap that caught this one.
 3. Save as **WebP at quality 85–90**, not PNG. PNG only wins for flat graphics
-   with very few colours; anything with photos or gradients (like this one) is
-   several times larger for no visible gain.
-4. After inserting, always set **Image size → Full Size** on full-width blocks.
-5. To check your work: open the page, right-click the image → Inspect, and
-   compare `naturalWidth` against the rendered width. If rendered is larger, it
-   is being upscaled and will look soft.
+   with very few colours; anything with photos or gradients is several times
+   larger for no visible gain.
+4. After inserting, set **Image size → Full Size** on full-width blocks.
+5. To check your work: right-click the image → Inspect, and compare
+   `naturalWidth` against the rendered width. If rendered is larger, it is being
+   upscaled and will look soft.
+
+---
 
 ## One thing worth flagging
 
-The homepage is currently a **single flat image** — I checked the rendered HTML
-and it contains 1 image, 0 links, 0 headings and 0 characters of text. The nav
-bar, the buttons, the phone numbers, the footer links are all painted pixels.
+The homepage is currently a **single flat image**. I checked the rendered HTML:
+it contains **1 image, 0 links, 0 headings and 0 characters of text**. The nav
+bar, the buttons, the footer links are all painted pixels.
 
-That has two consequences sharpening cannot fix:
+Two consequences that sharpening cannot fix:
 
 - **Nothing is clickable.** "Schedule a Free Consultation", the menu, the social
   icons — none of them do anything.
-- **It cannot be read on a phone.** I measured the body text at 31px in the
-  master. Scaled into a 390px phone window that becomes **4.9 CSS px**. On a
-  tablet it is 9.6px. On desktop it is a fine 17.9px. No amount of resolution
-  changes this — the layout is 2508px wide and the phone is 390px wide.
+- **It cannot be read on a phone.** The body text measures 31px in the master.
+  Scaled into a 390px phone window that becomes **4.9 CSS px**. On a tablet it's
+  9.6px. On desktop it's a fine 17.9px. No amount of resolution changes this —
+  the layout is 2508px wide and a phone is 390px.
 - Google sees an empty page: no text to index.
 
-The fix above will make it as sharp as the file allows, and on desktop it will
-look genuinely good. Rebuilding it as real HTML is a separate, larger job —
-happy to quote it if you want to go that way.
+The plugin makes it as sharp as the file allows, and on desktop it looks
+genuinely good. Rebuilding it as real HTML is a separate, larger job.
+
+---
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `rhino-home-2508w.webp` | **upload this one** — full master, 1.3 MB |
-| `rhino-home-2048w.webp` | optional srcset step |
-| `rhino-home-1536w.webp` | optional srcset step |
-| `rhino-home-1024w.webp` | optional srcset step |
-| `rhino-home-2508w.png` | PNG fallback, 9.1 MB |
-| `rhino-image-clarity.php` | the WordPress fix |
-| `before-after.jpg` | same crop, current site vs fixed |
+| `rhino-image-clarity.zip` | **install this** — plugin with assets bundled |
+| `rhino-image-clarity.php` | the plugin source, for reference |
+| `rhino-home-2508w.webp` | full master, 1.3 MB |
+| `rhino-home-2048w.webp` · `1536w` · `1024w` | srcset steps |
+| `rhino-home-2508w.png` | PNG fallback, 9.1 MB — not needed |
+| `before-after-live.jpg` | real browser screenshots, live vs fixed |
+| `before-after.jpg` | 1:1 pixel crop, same comparison |
