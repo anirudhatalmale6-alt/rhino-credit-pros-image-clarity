@@ -14,8 +14,23 @@ Adds a "Rhino Standard" page template with a site-wide header and footer.
    Schedule a Consultation link.
 3. A blue notice will offer to apply the template to every page. Click it once.
 
-That's it. To put a single page on the template by hand instead, edit the page
-and choose "Rhino Standard" under Template in the right-hand sidebar.
+To switch a single page on or off, go to Pages. There is a "Rhino Template"
+column with a button on every row. You can also select several pages and use
+the Bulk actions dropdown.
+
+== The front page is never touched ==
+
+Your homepage is a single flat artwork with its own painted header and your
+hand-built hotspot links. Putting a real header on top of it gives you two
+menus. So the plugin skips the front page completely: bulk apply ignores it,
+and even if the template is somehow assigned to it, the plugin refuses to
+render there. The Pages list shows it as "Front page - skipped".
+
+== Why not the Template dropdown in the editor ==
+
+Because your theme is a block theme. That editor's "Choose a template" screen
+only lists the theme's own block templates, and this is a classic PHP template,
+so it will not appear there. The Pages list column above does the same job.
 
 == Why a plugin and not Elementor ==
 
@@ -55,6 +70,11 @@ template they used before. Nothing is deleted. Your menu and settings stay put
 in case you turn it back on.
 
 == Changelog ==
+
+= 1.1.0 =
+* Front page is now excluded automatically - it can no longer end up with two headers
+* Per-page on/off from the Pages list, plus bulk actions (the block-theme editor
+  will not list classic templates, so this replaces that route)
 
 = 1.0.0 =
 * Registered "Rhino Standard" page template

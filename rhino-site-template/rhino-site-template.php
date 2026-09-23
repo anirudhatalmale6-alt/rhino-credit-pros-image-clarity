@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Rhino Site Template
  * Plugin URI:  https://github.com/anirudhatalmale6-alt/rhino-credit-pros-image-clarity
- * Description: Adds a "Rhino Standard" page template with a site-wide header and footer, so every page looks uniform. Pick it per page from the Template dropdown.
- * Version:     1.0.0
+ * Description: Adds a "Rhino Standard" page template with a site-wide header and footer, so every page looks uniform. Switch it on or off per page from the Pages list. The front page is left alone.
+ * Version:     1.1.0
  * Author:      Anirudha Talmale
  * License:     GPL-2.0-or-later
  */
@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'RHINO_TPL_VERSION', '1.0.0' );
+define( 'RHINO_TPL_VERSION', '1.1.0' );
 define( 'RHINO_TPL_FILE', __FILE__ );
 define( 'RHINO_TPL_SLUG', 'rhino-standard' );
 define( 'RHINO_TPL_MENU', 'rhino_primary' );
@@ -123,8 +123,14 @@ add_filter( 'theme_page_templates', function ( $templates ) {
 
 add_filter( 'template_include', function ( $template ) {
 	if ( is_singular() ) {
-		$assigned = get_page_template_slug( get_queried_object_id() );
-		if ( RHINO_TPL_SLUG === $assigned ) {
+		$id = get_queried_object_id();
+		// Never render on the front page, even if the meta says so. The
+		// homepage is a flat artwork with its own painted header and
+		// hand-built hotspot links; a second real header doubles the menu.
+		if ( in_array( (int) $id, rhino_tpl_excluded_ids(), true ) ) {
+			return $template;
+		}
+		if ( RHINO_TPL_SLUG === get_page_template_slug( $id ) ) {
 			return plugin_dir_path( RHINO_TPL_FILE ) . 'template-rhino-standard.php';
 		}
 	}
@@ -332,7 +338,14 @@ add_action( 'wp_enqueue_scripts', function () {
 } );
 
 function rhino_tpl_is_active() {
-	return is_singular() && RHINO_TPL_SLUG === get_page_template_slug( get_queried_object_id() );
+	if ( ! is_singular() ) {
+		return false;
+	}
+	$id = get_queried_object_id();
+	if ( in_array( (int) $id, rhino_tpl_excluded_ids(), true ) ) {
+		return false;
+	}
+	return RHINO_TPL_SLUG === get_page_template_slug( $id );
 }
 
 function rhino_tpl_css() {
@@ -498,6 +511,26 @@ add_action( 'admin_notices', function () {
 	);
 } );
 
+/**
+ * Pages that bulk-apply is allowed to touch.
+ *
+ * The front page is excluded: on this site the homepage is a single flat
+ * artwork with its own painted header and hand-built hotspot links, so adding
+ * a second real header on top of it produces two menus.
+ */
+function rhino_tpl_excluded_ids() {
+	$ids = array();
+	$front = (int) get_option( 'page_on_front' );
+	if ( $front ) {
+		$ids[] = $front;
+	}
+	$posts = (int) get_option( 'page_for_posts' );
+	if ( $posts ) {
+		$ids[] = $posts;
+	}
+	return apply_filters( 'rhino_tpl_excluded_ids', $ids );
+}
+
 function rhino_tpl_pages_not_on_template() {
 	$ids = get_posts( array(
 		'post_type'      => 'page',
@@ -505,8 +538,12 @@ function rhino_tpl_pages_not_on_template() {
 		'posts_per_page' => -1,
 		'fields'         => 'ids',
 	) );
-	$out = array();
+	$skip = rhino_tpl_excluded_ids();
+	$out  = array();
 	foreach ( $ids as $id ) {
+		if ( in_array( (int) $id, $skip, true ) ) {
+			continue;
+		}
 		if ( RHINO_TPL_SLUG !== get_page_template_slug( $id ) ) {
 			$out[] = $id;
 		}
@@ -537,4 +574,91 @@ add_action( 'admin_notices', function () {
 	delete_transient( 'rhino_tpl_applied' );
 	printf( '<div class="notice notice-success is-dismissible"><p>Rhino Standard applied to %d page%s.</p></div>',
 		(int) $n, 1 === (int) $n ? '' : 's' );
+} );
+
+/* ------------------------------------------------------------------ *
+ * Per-page control from the Pages list.
+ *
+ * Block themes do not offer classic page templates in the editor's template
+ * picker, so this is where per-page on/off actually lives.
+ * ------------------------------------------------------------------ */
+
+add_filter( 'manage_pages_columns', function ( $cols ) {
+	$cols['rhino_tpl'] = 'Rhino Template';
+	return $cols;
+} );
+
+add_action( 'manage_pages_custom_column', function ( $col, $post_id ) {
+	if ( 'rhino_tpl' !== $col ) {
+		return;
+	}
+	if ( in_array( (int) $post_id, rhino_tpl_excluded_ids(), true ) ) {
+		echo '<span style="color:#787c82;">Front page &mdash; skipped</span>';
+		return;
+	}
+	$on  = RHINO_TPL_SLUG === get_page_template_slug( $post_id );
+	$url = wp_nonce_url(
+		admin_url( 'edit.php?post_type=page&rhino_toggle=' . (int) $post_id ),
+		'rhino_toggle_' . (int) $post_id
+	);
+	printf(
+		'<a href="%s" class="button button-small">%s</a>',
+		esc_url( $url ),
+		$on ? 'On &mdash; turn off' : 'Off &mdash; turn on'
+	);
+}, 10, 2 );
+
+add_action( 'admin_init', function () {
+	if ( empty( $_GET['rhino_toggle'] ) || ! current_user_can( 'edit_pages' ) ) {
+		return;
+	}
+	$id = (int) $_GET['rhino_toggle'];
+	check_admin_referer( 'rhino_toggle_' . $id );
+	if ( in_array( $id, rhino_tpl_excluded_ids(), true ) ) {
+		wp_safe_redirect( admin_url( 'edit.php?post_type=page' ) );
+		exit;
+	}
+	if ( RHINO_TPL_SLUG === get_page_template_slug( $id ) ) {
+		delete_post_meta( $id, '_wp_page_template' );
+	} else {
+		update_post_meta( $id, '_wp_page_template', RHINO_TPL_SLUG );
+	}
+	wp_safe_redirect( admin_url( 'edit.php?post_type=page' ) );
+	exit;
+} );
+
+/** Bulk actions, for doing several at once. */
+add_filter( 'bulk_actions-edit-page', function ( $actions ) {
+	$actions['rhino_tpl_on']  = 'Use Rhino Standard template';
+	$actions['rhino_tpl_off'] = 'Remove Rhino Standard template';
+	return $actions;
+} );
+
+add_filter( 'handle_bulk_actions-edit-page', function ( $redirect, $action, $ids ) {
+	if ( 'rhino_tpl_on' !== $action && 'rhino_tpl_off' !== $action ) {
+		return $redirect;
+	}
+	$skip = rhino_tpl_excluded_ids();
+	$n    = 0;
+	foreach ( $ids as $id ) {
+		$id = (int) $id;
+		if ( in_array( $id, $skip, true ) || ! current_user_can( 'edit_post', $id ) ) {
+			continue;
+		}
+		if ( 'rhino_tpl_on' === $action ) {
+			update_post_meta( $id, '_wp_page_template', RHINO_TPL_SLUG );
+		} else {
+			delete_post_meta( $id, '_wp_page_template' );
+		}
+		$n++;
+	}
+	return add_query_arg( 'rhino_bulk', $n, $redirect );
+}, 10, 3 );
+
+add_action( 'admin_notices', function () {
+	if ( ! isset( $_GET['rhino_bulk'] ) ) {
+		return;
+	}
+	printf( '<div class="notice notice-success is-dismissible"><p>Updated %d page%s.</p></div>',
+		(int) $_GET['rhino_bulk'], 1 === (int) $_GET['rhino_bulk'] ? '' : 's' );
 } );
