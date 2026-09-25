@@ -14,6 +14,10 @@ Adds a "Rhino Standard" page template with a site-wide header and footer.
    Schedule a Consultation link.
 3. A blue notice will offer to apply the template to every page. Click it once.
 
+New pages get the template automatically from version 1.2.0 onwards, so you
+can just build and not think about it. If you deliberately pick a different
+template for a page, that choice is respected and never overwritten.
+
 To switch a single page on or off, go to Pages. There is a "Rhino Template"
 column with a button on every row. You can also select several pages and use
 the Bulk actions dropdown.
@@ -70,6 +74,10 @@ template they used before. Nothing is deleted. Your menu and settings stay put
 in case you turn it back on.
 
 == Changelog ==
+
+= 1.2.0 =
+* New pages now get the template automatically - no need to remember to apply it
+* An explicit template choice on a page is never overridden
 
 = 1.1.0 =
 * Front page is now excluded automatically - it can no longer end up with two headers

@@ -3,7 +3,7 @@
  * Plugin Name: Rhino Site Template
  * Plugin URI:  https://github.com/anirudhatalmale6-alt/rhino-credit-pros-image-clarity
  * Description: Adds a "Rhino Standard" page template with a site-wide header and footer, so every page looks uniform. Switch it on or off per page from the Pages list. The front page is left alone.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      Anirudha Talmale
  * License:     GPL-2.0-or-later
  */
@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'RHINO_TPL_VERSION', '1.1.0' );
+define( 'RHINO_TPL_VERSION', '1.2.0' );
 define( 'RHINO_TPL_FILE', __FILE__ );
 define( 'RHINO_TPL_SLUG', 'rhino-standard' );
 define( 'RHINO_TPL_MENU', 'rhino_primary' );
@@ -618,6 +618,9 @@ add_action( 'admin_init', function () {
 		wp_safe_redirect( admin_url( 'edit.php?post_type=page' ) );
 		exit;
 	}
+	// Mark it handled either way, so the first-save rule never reverses a
+	// decision made here.
+	update_post_meta( $id, '_rhino_tpl_seeded', 1 );
 	if ( RHINO_TPL_SLUG === get_page_template_slug( $id ) ) {
 		delete_post_meta( $id, '_wp_page_template' );
 	} else {
@@ -626,6 +629,35 @@ add_action( 'admin_init', function () {
 	wp_safe_redirect( admin_url( 'edit.php?post_type=page' ) );
 	exit;
 } );
+
+/**
+ * New pages get the template automatically.
+ *
+ * Without this, every page you create comes out with no header or footer until
+ * you remember to apply it. Only ever sets the template when the page does not
+ * already have one, so an explicit choice is never overridden.
+ */
+add_action( 'save_post_page', function ( $post_id, $post ) {
+	if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+		return;
+	}
+	if ( ! $post || 'trash' === $post->post_status ) {
+		return;
+	}
+	if ( in_array( (int) $post_id, rhino_tpl_excluded_ids(), true ) ) {
+		return;
+	}
+
+	// Act exactly once per page, on its first save. After that the page is the
+	// author's to control - switch it off from the Pages list and it stays off.
+	// This has to override rather than defer, because a block theme assigns its
+	// own default template on creation, so the slug is rarely empty by now.
+	if ( get_post_meta( $post_id, '_rhino_tpl_seeded', true ) ) {
+		return;
+	}
+	update_post_meta( $post_id, '_rhino_tpl_seeded', 1 );
+	update_post_meta( $post_id, '_wp_page_template', RHINO_TPL_SLUG );
+}, 10, 2 );
 
 /** Bulk actions, for doing several at once. */
 add_filter( 'bulk_actions-edit-page', function ( $actions ) {
@@ -645,6 +677,7 @@ add_filter( 'handle_bulk_actions-edit-page', function ( $redirect, $action, $ids
 		if ( in_array( $id, $skip, true ) || ! current_user_can( 'edit_post', $id ) ) {
 			continue;
 		}
+		update_post_meta( $id, '_rhino_tpl_seeded', 1 );
 		if ( 'rhino_tpl_on' === $action ) {
 			update_post_meta( $id, '_wp_page_template', RHINO_TPL_SLUG );
 		} else {
